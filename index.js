@@ -25,7 +25,8 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const db = client.db("TalentTrekDB");
-    const JobsCollections = db.collection("jobs");
+    const jobsCollections = db.collection("jobs");
+    const bidsCollections = db.collection("applicants");
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
     // Send a ping to confirm a successful connection
@@ -34,20 +35,20 @@ async function run() {
     // save the job in DB
     app.post("/add-jobs", async(req,res) =>{
       const jobsData = req.body;
-      const result = await JobsCollections.insertOne(jobsData)
+      const result = await jobsCollections.insertOne(jobsData)
       console.log(result)
       res.send(result)
     })
     // get all data from DB
     app.get("/jobs", async(req,res) =>{
-      const result = await JobsCollections.find().toArray();
+      const result = await jobsCollections.find().toArray();
       res.send(result);
     })
 
     // get data category wise from DB
     app.get("/jobs/:category", async(req,res) =>{
       const category = req.params;
-      const result =await JobsCollections.find(category).toArray()
+      const result =await jobsCollections.find(category).toArray()
       res.send(result)
     })
 
@@ -55,7 +56,7 @@ async function run() {
     app.get("/myJobs/:email", async(req,res) =>{
       const email = req.params.email;
       const query = ({'buyer.email':email})
-      const result = await JobsCollections.find(query).toArray()
+      const result = await jobsCollections.find(query).toArray()
       res.send(result)
     })
 
@@ -64,7 +65,7 @@ async function run() {
     app.get('/job/:id', async(req, res) =>{
       const id = req.params.id;
       const query = {_id : new ObjectId(id)}
-      const result = await JobsCollections.findOne(query)
+      const result = await jobsCollections.findOne(query)
       res.send(result)
     })
 
@@ -73,7 +74,7 @@ async function run() {
     app.delete('/job/:id', async(req,res)=>{
       const id = req.params.id;
       const query = {_id: new ObjectId(id)}
-      const result = await JobsCollections.deleteOne(query)
+      const result = await jobsCollections.deleteOne(query)
       res.send(result)
     })
 
@@ -87,10 +88,31 @@ async function run() {
       const updatedDoc = {
         $set:formData
       }
-      const result = await JobsCollections.updateOne(filter,updatedDoc,options)
+      const result = await jobsCollections.updateOne(filter,updatedDoc,options)
       res.send(result)
     })
 
+    // save job bid in DB
+    app.post('/add-bids', async(req,res)=>{
+      // 1. check whether this user is here or not.
+      const query ={email:req.body.email, jobId:req.body.jobId}
+      const userAlreadyExist = await bidsCollections.findOne(query)
+      if(userAlreadyExist){
+        return res
+        .status(400)
+        .send('you have already a bid in this job')
+      }
+      // 2.save data in bids collections
+      const bidData = req.body;
+      const result = await bidsCollections.insertOne(bidData)
+      // 3.increase bids count job collections
+      const filter ={_id: new ObjectId(bidData.jobId)}
+      const updatedDoc={
+        $inc:{bid_counts:1},
+      }
+      const updateBidCount = await jobsCollections.updateOne(filter,updatedDoc)
+      res.send(result)
+    })
 
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
